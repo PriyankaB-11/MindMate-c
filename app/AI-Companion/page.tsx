@@ -50,13 +50,24 @@ export default function AICompanionPage() {
     setApiError("");
 
     try {
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), 25000);
+
       const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: currentInput }),
+        signal: abortController.signal,
       });
 
-      const data = await res.json();
+      clearTimeout(timeout);
+
+      let data: { response?: string; error?: string } = {};
+      try {
+        data = (await res.json()) as { response?: string; error?: string };
+      } catch {
+        throw new Error("AI service returned an invalid response.");
+      }
 
       if (!res.ok) {
         // If response is not 2xx, throw an error to be caught by the catch block
@@ -72,11 +83,21 @@ export default function AICompanionPage() {
       setMessages((prevMessages) => [...prevMessages, botResponse]);
 
     } catch (err: unknown) {
-      console.error("Chat error:", err);
-      const errorMessage =
-        err instanceof Error && err.message
-          ? err.message
-          : "AI Companion is temporarily unavailable. Please try again shortly.";
+      let errorMessage =
+        "AI Companion is temporarily unavailable. Please try again shortly.";
+
+      if (err instanceof Error) {
+        if (err.name === "AbortError") {
+          errorMessage =
+            "The request timed out. Please try again in a moment.";
+        } else if (/failed to fetch|networkerror|network request failed/i.test(err.message)) {
+          errorMessage =
+            "Unable to reach AI service. Check your internet connection and try again.";
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+      }
+
       setApiError(errorMessage);
     } finally {
       setIsLoading(false);
