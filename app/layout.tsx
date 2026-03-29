@@ -2,7 +2,6 @@ import type React from "react"
 import "./globals.css"
 import type { Metadata } from "next"
 import { Montserrat, Open_Sans } from "next/font/google"
-import { AuthProvider } from "@/contexts/auth-context"
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -37,9 +36,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className="font-sans antialiased">
-        <AuthProvider>
-          <div className="min-h-screen bg-background text-foreground">{children}</div>
-        </AuthProvider>
+        <div className="min-h-screen bg-background text-foreground">{children}</div>
       </body>
     </html>
   )

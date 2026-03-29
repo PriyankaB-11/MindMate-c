@@ -1,293 +1,82 @@
-# 🧠 MindMate – Digital Psychological Intervention System
+# MindMate
 
-### 🌍 Empowering College Students to Prioritize Mental Health
+MindMate is a student mental health platform built with Next.js and Supabase.
 
----
+## Features
 
-## 🧾 Project Description
+- Supabase authentication (email/password)
+- Role-based access control (`student`, `admin`) via `profiles` table
+- AI Companion chat using Gemini API
+- Appointment booking workflow backed by Supabase Postgres
+- Student dashboard with booking history and statuses
+- Admin dashboard with booking approval/rejection
+- Mental wellness resource hub and informational pages
 
-**MindMate** is an AI-driven mental health support platform designed specifically for **college students**. The system offers early intervention through AI-guided conversations, educational resources, and confidential counseling appointments.
+## Tech Stack
 
-It aims to **bridge the gap between students and mental health support** by providing accessible, stigma-free, and personalized digital assistance — helping students manage **stress, anxiety, burnout, depression, and social isolation** effectively.
+- Next.js 15 (App Router)
+- TypeScript
+- Supabase (Auth + Postgres + RLS)
+- Zod validation
+- Tailwind CSS + shadcn/ui
+- Vitest
 
----
+## Local Setup
 
-## ❗ Problem Statement
+1. Install dependencies:
 
-Mental health issues like **academic stress, anxiety, and depression** have become increasingly common among students. Due to stigma, lack of awareness, or unavailability of counselors, many students **hesitate to seek help**.
-This leads to declining academic performance, reduced self-esteem, and long-term emotional distress.
+   npm install
 
-There is a **need for a digital-first, confidential, and approachable system** that encourages students to take the first step toward improving their mental well-being.
+2. Copy and fill environment variables:
 
----
+   copy .env.example .env
 
-## 💡 Proposed Solution
+3. Create these Supabase tables and policies in your project:
 
-**MindMate** provides a holistic, tech-enabled solution by combining **AI-driven support**, **counseling appointment management**, and **psychoeducational content**.
+   - `profiles`: `id uuid primary key`, `name text`, `role text check (role in ('student','admin'))`, `email text`
+   - `bookings`: `id uuid primary key default gen_random_uuid()`, `user_id uuid references profiles(id)`, `date date`, `time text`, `notes text`, `status text check (status in ('pending','approved','rejected')) default 'pending'`, `created_at timestamptz default now()`
+   - Enable RLS on both tables.
+   - Add policies so students can read/write only their own rows and admins can read/update all bookings.
 
-Students can chat with an **AI-based emotional support assistant** for immediate coping strategies, explore scientifically curated **mental health resources**, and **book private sessions** with counselors when needed.
+4. Run development server:
 
----
+   npm run dev
 
-## 🎯 Target Audience
+5. Open application:
 
-* 🎓 **College and university students** facing academic, emotional, or social stress.
-* 🧑‍🏫 **Counselors and institutions** seeking digital tools to support student well-being.
+   http://localhost:3000
 
----
+## Environment Variables
 
-## ⚙️ Key Features
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon public key
+- `GEMINI_API_KEY`: Gemini API key for AI Companion
 
-✅ **AI Mental Health Assistant** – Provides first-level psychological aid and coping tips using natural language understanding.
-✅ **Confidential Appointment Booking** – Enables students to connect with counselors or helplines anonymously.
-✅ **Resource Hub** – Offers verified educational material on stress management, mindfulness, and emotional wellness.
-✅ **AI-Powered Self-Help Chatbot** – Gives instant suggestions for mood regulation, motivation, and focus.
-✅ **Admin Dashboard** – Allows administrators to manage counselors, appointments, and educational resources.
+## Scripts
 
----
+- `npm run dev` - start dev server
+- `npm run build` - production build
+- `npm run start` - run production server
+- `npm run lint` - lint project
+- `npm run test` - run test suite
+- `npm run test:watch` - run tests in watch mode
 
-## 🧠 Technical Approach & Tech Stack
+## Deployment (Vercel)
 
-| Layer               | Technology Used                                                               |
-| ------------------- | ----------------------------------------------------------------------------- |
-| **Frontend**        | React.js, Tailwind CSS                                                        |
-| **Backend**         | Node.js, Express.js                                                           |
-| **Database**        | MongoDB                                                                       |
-| **AI Integration**  | Gemini API (for contextual understanding and emotional support conversations) |
-| **Authentication**  | JWT-based user authentication                                                 |
-| **Deployment**      | Vercel (Frontend), Render/Heroku (Backend)                                    |
-| **Version Control** | GitHub                                                                        |
+1. Push repository to GitHub.
+2. Import project into Vercel.
+3. Configure environment variables in Vercel project settings:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `GEMINI_API_KEY`
+4. Deploy.
 
----
+## Security Notes
 
-## 🧩 Architecture Overview
+- Auth is handled by Supabase Auth.
+- Data protection should be enforced with Supabase RLS policies.
+- Booking and user access are role-aware through profile checks and table policies.
 
-1. **Frontend (React + Tailwind)**
+## Test Coverage
 
-   * Interactive and responsive UI for students and counselors.
-2. **Backend (Node + Express)**
-
-   * REST APIs handling authentication, bookings, and chatbot queries.
-3. **AI Layer (Gemini API)**
-
-   * Processes user input and generates empathetic, context-aware responses.
-4. **Database (MongoDB)**
-
-   * Stores user details, appointments, and resource data securely.
-
----
-
-## 🚀 Future Scope
-
-* 🤖 Integration with **emotion detection** through voice or facial sentiment analysis.
-* 🧘 Addition of **guided meditation and CBT-based exercises**.
-* 🩺 Collaboration with certified psychologists for real-time consultations.
-* 📱 Mobile app version for on-the-go accessibility.
-* 🌐 Multi-language support to reach a wider audience.
-
----
-
-## 🏁 Deployment
-
-The project is live at:
-👉 [https://mind-mate-eprv.vercel.app](https://mind-mate-eprv.vercel.app)
-
-The project Live Demo Video at:
-👉 [https://youtu.be/E1a19FJ-uiU](https://youtu.be/E1a19FJ-uiU)
-
----
-
-## 📸 Screenshots
-
-<img width="1909" height="904" alt="screenshot-1761749746217" src="https://github.com/user-attachments/assets/6468f71f-63ac-4fca-bb66-cfc419159608" />
-<img width="1909" height="904" alt="screenshot-1761749777790" src="https://github.com/user-attachments/assets/985c9a6c-93d7-4aa1-bec8-0198cbc6e875" />
-<img width="1909" height="904" alt="screenshot-1761749581780" src="https://github.com/user-attachments/assets/05c8c17b-f5b7-4c9e-b1bc-db5ed5e90b38" />
-<img width="1909" height="904" alt="screenshot-1761749631357" src="https://github.com/user-attachments/assets/6fa16746-d645-4e42-8bbc-359b4edc5337" />
-<img width="1909" height="904" alt="screenshot-1761749698578" src="https://github.com/user-attachments/assets/e5c094a1-f662-48ed-90b1-844868a3cc6d" />
-<img width="1909" height="904" alt="screenshot-1761749719010" src="https://github.com/user-attachments/assets/8a8673cb-d352-4e8b-b990-a9972d134ebc" />
-
-
-
-## 🪄 How to Run Locally
-
-```bash
-# Clone this repository
-git clone https://github.com/PriyankaB-11/MindMate.git
-
-# Navigate to project folder
-cd MindMate
-
-# Install dependencies
-npm install
-
-# Set environment variables (.env)
-PORT=5000
-MONGODB_URI=your_mongo_uri
-JWT_SECRET=your_secret_key
-FRONTEND_URL=http://localhost:3000
-GEMINI_API_KEY=your_gemini_api_key
-
-# Start the website
-npm run server
-
-```
-
-MindMate
-├─ app
-│  ├─ About
-│  │  ├─ loading.tsx
-│  │  └─ page.tsx
-│  ├─ admin
-│  │  ├─ loading.tsx
-│  │  ├─ login
-│  │  │  └─ page.tsx
-│  │  └─ page.tsx
-│  ├─ api
-│  │  └─ geo
-│  │     └─ route.ts
-│  ├─ booking
-│  │  └─ page.tsx
-│  ├─ checkout
-│  │  ├─ loading.tsx
-│  │  └─ page.tsx
-│  ├─ dashboard
-│  │  ├─ admin
-│  │  │  ├─ layout.tsx
-│  │  │  └─ page.tsx
-│  │  └─ student
-│  │     ├─ layout.tsx
-│  │     └─ page.tsx
-│  ├─ faq
-│  │  └─ page.tsx
-│  ├─ globals.css
-│  ├─ layout.tsx
-│  ├─ login
-│  │  ├─ layout.tsx
-│  │  └─ page.tsx
-│  ├─ AI-Companion
-│  │  └─ page.tsx
-│  ├─ page.tsx
-│  ├─ resources
-│  │  ├─ loading.tsx
-│  │  └─ page.tsx
-│  ├─ revisions
-│  │  └─ page.tsx
-│  ├─ robots.txt
-│  │  └─ route.ts
-│  ├─ signup
-│  │  ├─ layout.tsx
-│  │  └─ page.tsx
-│  ├─ sitemap.xml
-│  │  └─ route.ts
-│  └─ t&c
-│     └─ page.tsx
-├─ components
-│  ├─ appverse-footer.tsx
-│  ├─ call-to-action.tsx
-│  ├─ chatbot.tsx
-│  ├─ examples-dialog.tsx
-│  ├─ features.tsx
-│  ├─ footer.tsx
-│  ├─ header.tsx
-│  ├─ hero.tsx
-│  ├─ lazy-video.tsx
-│  ├─ Lightning.css
-│  ├─ lightning.tsx
-│  ├─ logo-marquee.tsx
-│  ├─ logo-section.tsx
-│  ├─ order-form.tsx
-│  ├─ phone-video.tsx
-│  ├─ Plasma.css
-│  ├─ plasma.tsx
-│  ├─ pricing.tsx
-│  ├─ protected-route.tsx
-│  ├─ redirect-if-authenticated.tsx
-│  ├─ site-header.tsx
-│  ├─ theme-provider.tsx
-│  ├─ ui
-│  │  ├─ accordion.tsx
-│  │  ├─ alert-dialog.tsx
-│  │  ├─ alert.tsx
-│  │  ├─ aspect-ratio.tsx
-│  │  ├─ avatar.tsx
-│  │  ├─ badge.tsx
-│  │  ├─ breadcrumb.tsx
-│  │  ├─ button.tsx
-│  │  ├─ calendar.tsx
-│  │  ├─ card.tsx
-│  │  ├─ carousel.tsx
-│  │  ├─ chart.tsx
-│  │  ├─ checkbox.tsx
-│  │  ├─ collapsible.tsx
-│  │  ├─ command.tsx
-│  │  ├─ context-menu.tsx
-│  │  ├─ dialog.tsx
-│  │  ├─ drawer.tsx
-│  │  ├─ dropdown-menu.tsx
-│  │  ├─ form.tsx
-│  │  ├─ hover-card.tsx
-│  │  ├─ input-otp.tsx
-│  │  ├─ input.tsx
-│  │  ├─ label.tsx
-│  │  ├─ menubar.tsx
-│  │  ├─ navigation-menu.tsx
-│  │  ├─ pagination.tsx
-│  │  ├─ popover.tsx
-│  │  ├─ progress.tsx
-│  │  ├─ radio-group.tsx
-│  │  ├─ resizable.tsx
-│  │  ├─ scroll-area.tsx
-│  │  ├─ select.tsx
-│  │  ├─ separator.tsx
-│  │  ├─ sheet.tsx
-│  │  ├─ sidebar.tsx
-│  │  ├─ skeleton.tsx
-│  │  ├─ slider.tsx
-│  │  ├─ sonner.tsx
-│  │  ├─ switch.tsx
-│  │  ├─ table.tsx
-│  │  ├─ tabs.tsx
-│  │  ├─ textarea.tsx
-│  │  ├─ toast.tsx
-│  │  ├─ toaster.tsx
-│  │  ├─ toggle-group.tsx
-│  │  ├─ toggle.tsx
-│  │  ├─ tooltip.tsx
-│  │  ├─ use-mobile.tsx
-│  │  └─ use-toast.ts
-│  └─ youtube-grid.tsx
-├─ components.json
-├─ contexts
-│  └─ auth-context.tsx
-├─ files
-├─ hooks
-│  ├─ use-mobile.ts
-│  └─ use-toast.ts
-├─ lib
-│  └─ utils.ts
-├─ middleware.ts
-├─ next.config.mjs
-├─ package-lock.json
-├─ package.json
-├─ pnpm-lock.yaml
-├─ postcss.config.mjs
-├─ public
-│  ├─ icons
-│  │  ├─ favicon-dark.svg
-│  │  └─ skitbit-white.svg
-│  ├─ images
-│  │  ├─ intuitive-1.png
-│  │  ├─ intuitive-2.png
-│  │  ├─ top-rated-1.png
-│  │  └─ top-rated-2.png
-│  ├─ placeholder-logo.png
-│  ├─ placeholder-logo.svg
-│  ├─ placeholder-user.jpg
-│  ├─ placeholder.jpg
-│  └─ placeholder.svg
-├─ styles
-│  └─ globals.css
-├─ tailwind.config.ts
-└─ tsconfig.json
-
-```
+Included tests cover role utility behavior and can be expanded for Supabase-integrated flows.

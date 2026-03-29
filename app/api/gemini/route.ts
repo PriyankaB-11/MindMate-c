@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { z } from "zod";
 
 // Initialize Gemini API client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+const promptSchema = z.object({
+  prompt: z.string().trim().min(1).max(1500),
+});
 
 const SIH_CONTEXT = `
 Role & Identity
@@ -24,24 +29,93 @@ If user says: “I don’t want to live anymore” → AICompanion replies: “I
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
-
-    if (!prompt) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "Prompt is required" },
+        { error: "AI service is not configured. Please set GEMINI_API_KEY." },
+        { status: 500 }
+      );
+    }
+
+    const body = await req.json();
+    const parsed = promptSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid prompt payload" },
         { status: 400 }
       );
     }
 
+    const { prompt } = parsed.data;
+
     const fullPrompt = `${SIH_CONTEXT}\n\nUser said: "${prompt}"\n\nRespond helpfully and empathetically:`;
 
-    // Corrected this line to use a stable model that should work.
-    const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
-    const result = await model.generateContent(fullPrompt);
+    const candidateModels = [
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+    ];
+    let responseText = "";
+    let lastModelError: unknown = null;
 
-    return NextResponse.json({ response: result.response.text() });
-  } catch (error: any) {
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(fullPrompt);
+        responseText = result.response.text();
+        if (responseText) break;
+      } catch (modelError) {
+        lastModelError = modelError;
+      }
+    }
+
+    if (!responseText) {
+      const rawMessage =
+        lastModelError instanceof Error
+          ? lastModelError.message
+          : "No supported Gemini model responded.";
+
+      if (/api key|permission|forbidden|unauthorized|quota|billing/i.test(rawMessage)) {
+        return NextResponse.json(
+          {
+            error:
+              "AI service is unavailable: check GEMINI_API_KEY validity, Gemini API enablement, billing, and quota in Google AI Studio.",
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "AI service is temporarily unavailable due to model access issues. Please try again shortly.",
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ response: responseText });
+  } catch (error: unknown) {
     console.error("Gemini API error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const rawMessage = error instanceof Error ? error.message : "Unknown AI error";
+
+    if (/api key|permission|forbidden|unauthorized|quota|billing/i.test(rawMessage)) {
+      return NextResponse.json(
+        {
+          error:
+            "AI service is unavailable: check GEMINI_API_KEY validity, Gemini API enablement, billing, and quota in Google AI Studio.",
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          "I could not process that request right now. Please try again in a moment or book a counselor session if you need urgent support.",
+      },
+      { status: 500 }
+    );
   }
 }

@@ -43,14 +43,14 @@ export function Footer() {
           <h3 className="text-lg font-bold mb-4 text-white">For Individuals</h3>
           <ul className="text-sm space-y-1 text-center">
             <li>
-              <Link href="#">Book Free Consultation</Link>
+              <Link href="/booking">Book Consultation</Link>
             </li>
 
             <li>
-              <Link href="#">Blogs and Articles</Link>
+              <Link href="/resources">Resources</Link>
             </li>
             <li>
-              <Link href="#">Book Therapist</Link>
+              <Link href="/contact">Contact Support</Link>
             </li>
           </ul>
         </div>

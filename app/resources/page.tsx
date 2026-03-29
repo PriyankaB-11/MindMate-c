@@ -41,6 +41,16 @@ interface Resource {
   rating: number;
   content: string;
   tags: string[];
+  url?: string;
+}
+
+interface YoutubeVideo {
+  id: number;
+  title: string;
+  channel: string;
+  duration: string;
+  url: string;
+  focus: string;
 }
 
 const resources: Resource[] = [
@@ -132,6 +142,74 @@ const categories = [
   "Relationships",
   "Academic Support",
   "Crisis Support",
+  "Video Guides",
+];
+
+const youtubeVideos: YoutubeVideo[] = [
+  {
+    id: 1,
+    title: "10-Minute Meditation For Anxiety",
+    channel: "Goodful",
+    duration: "10 min",
+    url: "https://www.youtube.com/watch?v=O-6f5wQXSu8",
+    focus: "Calm anxious thoughts",
+  },
+  {
+    id: 2,
+    title: "Guided Meditation for Stress Relief",
+    channel: "The Mindful Movement",
+    duration: "12 min",
+    url: "https://www.youtube.com/watch?v=MIr3RsUWrdo",
+    focus: "Stress release",
+  },
+  {
+    id: 3,
+    title: "Sleep Meditation for Deep Sleep",
+    channel: "Jason Stephenson - Sleep Meditation Music",
+    duration: "20 min",
+    url: "https://www.youtube.com/watch?v=aEqlQvczMJQ",
+    focus: "Improve sleep quality",
+  },
+  {
+    id: 4,
+    title: "Box Breathing Technique",
+    channel: "Headspace",
+    duration: "3 min",
+    url: "https://www.youtube.com/watch?v=tEmt1Znux58",
+    focus: "Quick reset between tasks",
+  },
+  {
+    id: 5,
+    title: "Mindfulness Exercise - Being Present",
+    channel: "Psych Hub",
+    duration: "8 min",
+    url: "https://www.youtube.com/watch?v=6p_yaNFSYao",
+    focus: "Build present-moment awareness",
+  },
+  {
+    id: 6,
+    title: "Progressive Muscle Relaxation",
+    channel: "Anxiety Canada",
+    duration: "13 min",
+    url: "https://www.youtube.com/watch?v=86HUcX8ZtAk",
+    focus: "Reduce body tension",
+  },
+];
+
+const allResources: Resource[] = [
+  ...resources,
+  ...youtubeVideos.map((video, index) => ({
+    id: resources.length + index + 1,
+    title: video.title,
+    description: `${video.focus} with guidance from ${video.channel}.`,
+    category: "Video Guides",
+    type: "video" as const,
+    duration: video.duration,
+    rating: 4.8,
+    content: `Watch this guided mental wellbeing video on YouTube: ${video.url}`,
+    tags: ["youtube", "mental wellbeing", "guided"],
+    url: video.url,
+  })),
 ];
 
 export default function ResourcesPage() {
@@ -141,7 +219,7 @@ export default function ResourcesPage() {
     null
   );
 
-  const filteredResources = resources.filter((resource) => {
+  const filteredResources = allResources.filter((resource) => {
     const matchesSearch =
       resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resource.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -279,63 +357,77 @@ export default function ResourcesPage() {
                     ))}
                   </div>
 
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        className="w-full"
-                        onClick={() => setSelectedResource(resource)}
-                      >
-                        View Resource
+                  {resource.type === "video" && resource.url ? (
+                    <a
+                      href={resource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <Button className="w-full" variant="outline">
+                        Watch on YouTube
                         <ExternalLink className="ml-2 h-4 w-4" />
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge
-                            className={`${getTypeColor(
-                              resource.type
-                            )} flex items-center gap-1`}
-                          >
-                            {getTypeIcon(resource.type)}
-                            {resource.type}
-                          </Badge>
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            {resource.rating}
-                          </div>
-                        </div>
-                        <DialogTitle className="text-xl">
-                          {resource.title}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {resource.duration}
-                          </div>
-                          <Badge variant="outline">{resource.category}</Badge>
-                        </div>
-                        <div className="prose prose-sm max-w-none">
-                          <p className="text-foreground leading-relaxed whitespace-pre-line">
-                            {resource.content}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {resource.tags.map((tag) => (
+                    </a>
+                  ) : (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          className="w-full"
+                          onClick={() => setSelectedResource(resource)}
+                        >
+                          View Resource
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <div className="flex items-center gap-2 mb-2">
                             <Badge
-                              key={tag}
-                              variant="secondary"
-                              className="text-xs"
+                              className={`${getTypeColor(
+                                resource.type
+                              )} flex items-center gap-1`}
                             >
-                              {tag}
+                              {getTypeIcon(resource.type)}
+                              {resource.type}
                             </Badge>
-                          ))}
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                              {resource.rating}
+                            </div>
+                          </div>
+                          <DialogTitle className="text-xl">
+                            {resource.title}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {resource.duration}
+                            </div>
+                            <Badge variant="outline">{resource.category}</Badge>
+                          </div>
+                          <div className="prose prose-sm max-w-none">
+                            <p className="text-foreground leading-relaxed whitespace-pre-line">
+                              {resource.content}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {resource.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </CardContent>
               </Card>
             ))}

@@ -1,10 +1,5 @@
-import type React from "react"
-import { ProtectedRoute } from "@/components/protected-route"
+import type { ReactNode } from "react"
 
-export default function AdminDashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return <ProtectedRoute requiredRole="admin">{children}</ProtectedRoute>
+export default function AdminDashboardLayout({ children }: { children: ReactNode }) {
+  return <>{children}</>
 }

@@ -109,6 +109,7 @@ export const Plasma: React.FC<PlasmaProps> = ({
 
   useEffect(() => {
     if (!containerRef.current) return
+    const container = containerRef.current
 
     // --- Device detection ---
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -130,7 +131,7 @@ export const Plasma: React.FC<PlasmaProps> = ({
     canvas.style.display = "block"
     canvas.style.width = "100%"
     canvas.style.height = "100%"
-    containerRef.current.appendChild(canvas)
+    container.appendChild(canvas)
 
     const geometry = new Triangle(gl)
 
@@ -156,7 +157,7 @@ export const Plasma: React.FC<PlasmaProps> = ({
     // --- Mouse interaction (skip on iOS) ---
     const handleMouseMove = (e: MouseEvent) => {
       if (isIOS || !mouseInteractive) return
-      const rect = containerRef.current!.getBoundingClientRect()
+      const rect = container.getBoundingClientRect()
       mousePos.current.x = e.clientX - rect.left
       mousePos.current.y = e.clientY - rect.top
       const mouseUniform = program.uniforms.uMouse.value as Float32Array
@@ -164,12 +165,12 @@ export const Plasma: React.FC<PlasmaProps> = ({
       mouseUniform[1] = mousePos.current.y
     }
     if (!isIOS && mouseInteractive) {
-      containerRef.current.addEventListener("mousemove", handleMouseMove)
+      container.addEventListener("mousemove", handleMouseMove)
     }
 
     // --- Resize handling ---
     const setSize = () => {
-      const rect = containerRef.current!.getBoundingClientRect()
+      const rect = container.getBoundingClientRect()
       const width = Math.max(1, Math.floor(rect.width))
       const height = Math.max(1, Math.floor(rect.height))
       renderer.setSize(width, height)
@@ -178,7 +179,7 @@ export const Plasma: React.FC<PlasmaProps> = ({
       res[1] = gl.drawingBufferHeight
     }
     const ro = new ResizeObserver(setSize)
-    ro.observe(containerRef.current)
+    ro.observe(container)
     setSize()
 
     // --- Animation loop ---
@@ -204,11 +205,11 @@ export const Plasma: React.FC<PlasmaProps> = ({
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
-      if (!isIOS && mouseInteractive && containerRef.current) {
-        containerRef.current.removeEventListener("mousemove", handleMouseMove)
+      if (!isIOS && mouseInteractive) {
+        container.removeEventListener("mousemove", handleMouseMove)
       }
       try {
-        containerRef.current?.removeChild(canvas)
+        container.removeChild(canvas)
       } catch {}
     }
   }, [color, speed, direction, scale, opacity, mouseInteractive])

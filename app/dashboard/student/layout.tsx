@@ -1,10 +1,5 @@
-import type React from "react"
-import { ProtectedRoute } from "@/components/protected-route"
+import type { ReactNode } from "react"
 
-export default function StudentDashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return <ProtectedRoute requiredRole="student">{children}</ProtectedRoute>
+export default function StudentDashboardLayout({ children }: { children: ReactNode }) {
+  return <>{children}</>
 }

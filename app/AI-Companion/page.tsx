@@ -26,6 +26,7 @@ export default function AICompanionPage() {
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function AICompanionPage() {
     const currentInput = inputValue;
     setInputValue("");
     setIsLoading(true);
+    setApiError("");
 
     try {
       const res = await fetch("/api/gemini", {
@@ -69,15 +71,13 @@ export default function AICompanionPage() {
       };
       setMessages((prevMessages) => [...prevMessages, botResponse]);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Chat error:", err);
-      const errorMessage: Message = {
-        id: Date.now() + 1, // Unique key
-        text: "I hear you. Exam pressure can be overwhelming. Let’s take a quick grounding exercise together—take a deep breath, inhale for 4 seconds, hold for 4, and exhale for 6. Would you like me to share a few quick revision hacks to ease your stress?",
-        sender: "bot",
-        timestamp: new Date(),
-      };
-      setMessages((prevMessages) => [...prevMessages, errorMessage]);
+      const errorMessage =
+        err instanceof Error && err.message
+          ? err.message
+          : "AI Companion is temporarily unavailable. Please try again shortly.";
+      setApiError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -201,6 +201,7 @@ export default function AICompanionPage() {
                     <Send className="h-5 w-5" />
                   </Button>
                 </div>
+                {apiError ? <p className="mt-2 text-xs text-destructive">{apiError}</p> : null}
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-xs text-muted-foreground">
                     Press Enter to send • AI Companion is here to support you

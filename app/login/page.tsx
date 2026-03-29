@@ -9,19 +9,62 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAuth, type UserRole } from "@/contexts/auth-context";
 import Header from "@/components/header";
-import { Loader2, Brain, Shield, Chrome, Apple, Facebook } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { getDashboardPath, isUserRole, resolveEffectiveRole, type UserRole } from "@/lib/role-utils";
+
+type LoginRole = UserRole;
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<UserRole>("student");
-  const { login, isLoading } = useAuth();
+  const [activeTab, setActiveTab] = useState<LoginRole>("student");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUser = authData.user;
+
+      if (authUser) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        const role = resolveEffectiveRole(profile?.role, authUser.email ?? null);
+
+        if (role === "admin" && profile?.role !== "admin") {
+          await supabase.from("profiles").upsert(
+            {
+              id: authUser.id,
+              role: "admin",
+              email: authUser.email ?? null,
+            },
+            { onConflict: "id" },
+          );
+        }
+
+        router.replace(getDashboardPath(role));
+        return;
+      }
+
+      setIsBootstrapping(false);
+    };
+
+    bootstrap();
+  }, [router]);
+
+  if (isBootstrapping) {
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,14 +75,56 @@ export default function LoginPage() {
       return;
     }
 
-    const success = await login(email, password, activeTab);
-    if (success) {
-      const dashboardPath =
-        activeTab === "admin" ? "/dashboard/admin" : "/dashboard/student";
-      router.push(dashboardPath);
-    } else {
-      setError("Invalid credentials. Please try again.");
+    setIsSubmitting(true);
+
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+
+    setIsSubmitting(false);
+
+    if (loginError || !data.user) {
+      const message = loginError?.message || "Invalid credentials. Please try again.";
+      setError(message);
+      return;
     }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    let role = resolveEffectiveRole(profile?.role, data.user.email ?? null);
+
+    if (!profile) {
+      const roleFromMetadata = isUserRole(data.user.user_metadata?.role)
+        ? data.user.user_metadata.role
+        : "student";
+
+      role = resolveEffectiveRole(roleFromMetadata, data.user.email ?? null);
+
+      await supabase.from("profiles").upsert(
+        {
+          id: data.user.id,
+          name:
+            typeof data.user.user_metadata?.name === "string" && data.user.user_metadata.name.trim().length > 0
+              ? data.user.user_metadata.name
+              : data.user.email?.split("@")[0] || "User",
+          role: roleFromMetadata,
+          email: data.user.email ?? null,
+        },
+        { onConflict: "id" },
+      );
+    } else if (role === "admin" && profile?.role !== "admin") {
+      await supabase.from("profiles").update({ role: "admin" }).eq("id", data.user.id);
+    }
+
+    if (role !== activeTab) {
+      await supabase.auth.signOut();
+      setError(`This account is registered as ${role}. Please choose the correct tab.`);
+      return;
+    }
+
+    router.push(getDashboardPath(role));
   };
 
   return (
@@ -61,191 +146,85 @@ export default function LoginPage() {
 
           <Card className="bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl">
             <CardContent className="p-8">
-              <Tabs
-                value={activeTab}
-                onValueChange={(value) => setActiveTab(value as UserRole)}
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-100/50 backdrop-blur-sm border-0 rounded-xl">
-                  <TabsTrigger
-                    value="student"
-                    className="text-sm data-[state=active]:bg-white data-[state=active]:text-gray-800 text-gray-600 transition-all duration-300 rounded-lg"
-                  >
-                    <Brain className="w-4 h-4 mr-2" />
-                    Student
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="admin"
-                    className="text-sm data-[state=active]:bg-white data-[state=active]:text-gray-800 text-gray-600 transition-all duration-300 rounded-lg"
-                  >
-                    <Shield className="w-4 h-4 mr-2" />
-                    Admin
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="student" className="space-y-4">
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="email"
-                        className="text-gray-700 font-medium"
-                      >
-                        Email Address
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="bg-white/50 border-gray-200/50 text-gray-800 placeholder:text-gray-400 focus:border-blue-300 focus:ring-blue-200 backdrop-blur-sm transition-all duration-300 rounded-xl h-12"
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="password"
-                        className="text-gray-700 font-medium"
-                      >
-                        Password
-                      </Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Enter your password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="bg-white/50 border-gray-200/50 text-gray-800 placeholder:text-gray-400 focus:border-blue-300 focus:ring-blue-200 backdrop-blur-sm transition-all duration-300 rounded-xl h-12"
-                        disabled={isLoading}
-                      />
-                    </div>
-
-                    {error && (
-                      <Alert
-                        variant="destructive"
-                        className="bg-red-50/80 border-red-200 text-red-700 rounded-xl"
-                      >
-                        <AlertDescription>{error}</AlertDescription>
-                      </Alert>
-                    )}
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-blue-900 hover:bg-blue-800 text-white shadow-lg transition-all duration-300 rounded-xl h-12 font-medium"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Signing in...
-                        </>
-                      ) : (
-                        "Sign In"
-                      )}
-                    </Button>
-                  </form>
-                </TabsContent>
-
-                <TabsContent value="admin" className="space-y-4">
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="admin-email"
-                        className="text-gray-700 font-medium"
-                      >
-                        Email Address
-                      </Label>
-                      <Input
-                        id="admin-email"
-                        type="email"
-                        placeholder="admin@MindMate.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="bg-white/50 border-gray-200/50 text-gray-800 placeholder:text-gray-400 focus:border-purple-300 focus:ring-purple-200 backdrop-blur-sm transition-all duration-300 rounded-xl h-12"
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="admin-password"
-                        className="text-gray-700 font-medium"
-                      >
-                        Password
-                      </Label>
-                      <Input
-                        id="admin-password"
-                        type="password"
-                        placeholder="Enter your password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="bg-white/50 border-gray-200/50 text-gray-800 placeholder:text-gray-400 focus:border-purple-300 focus:ring-purple-200 backdrop-blur-sm transition-all duration-300 rounded-xl h-12"
-                        disabled={isLoading}
-                      />
-                    </div>
-
-                    {error && (
-                      <Alert
-                        variant="destructive"
-                        className="bg-red-50/80 border-red-200 text-red-700 rounded-xl"
-                      >
-                        <AlertDescription>{error}</AlertDescription>
-                      </Alert>
-                    )}
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-blue-900 hover:bg-blue-800 text-white shadow-lg transition-all duration-300 rounded-xl h-12 font-medium"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Signing in...
-                        </>
-                      ) : (
-                        "Sign In"
-                      )}
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-gray-200" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-gray-500">
-                      OR CONTINUE WITH
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/50 border-gray-200/50 text-gray-700 hover:bg-white/70 transition-all duration-300 rounded-xl h-12"
-                  >
-                    <Chrome className="mr-2 h-4 w-4" />
-                    Continue with Google
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/50 border-gray-200/50 text-gray-700 hover:bg-white/70 transition-all duration-300 rounded-xl h-12"
-                  >
-                    <Apple className="mr-2 h-4 w-4" />
-                    Continue with Apple
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/50 border-gray-200/50 text-gray-700 hover:bg-white/70 transition-all duration-300 rounded-xl h-12"
-                  >
-                    <Facebook className="mr-2 h-4 w-4 text-blue-600" />
-                    Continue with Meta
-                  </Button>
-                </div>
+              <div className="grid grid-cols-2 mb-6 bg-gray-100/50 rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("student")}
+                  className={`rounded-lg h-10 text-sm transition-all ${
+                    activeTab === "student"
+                      ? "bg-white text-gray-900"
+                      : "text-gray-600"
+                  }`}
+                >
+                  Student
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("admin")}
+                  className={`rounded-lg h-10 text-sm transition-all ${
+                    activeTab === "admin"
+                      ? "bg-white text-gray-900"
+                      : "text-gray-600"
+                  }`}
+                >
+                  Admin
+                </button>
               </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-gray-700 font-medium">
+                    Email Address
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-white/50 border-gray-200/50 text-gray-800 placeholder:text-gray-400 focus:border-blue-300 focus:ring-blue-200 backdrop-blur-sm transition-all duration-300 rounded-xl h-12"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-gray-700 font-medium">
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-white/50 border-gray-200/50 text-gray-800 placeholder:text-gray-400 focus:border-blue-300 focus:ring-blue-200 backdrop-blur-sm transition-all duration-300 rounded-xl h-12"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {error && (
+                  <Alert
+                    variant="destructive"
+                    className="bg-red-50/80 border-red-200 text-red-700 rounded-xl"
+                  >
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full bg-blue-900 hover:bg-blue-800 text-white shadow-lg transition-all duration-300 rounded-xl h-12 font-medium"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
+              </form>
 
               <div className="mt-6 text-center">
                 <Link
@@ -266,22 +245,6 @@ export default function LoginPage() {
                     Sign up
                   </Link>
                 </p>
-              </div>
-
-              <div className="mt-4 p-4 bg-gray-50/50 rounded-xl border border-gray-200/50">
-                <p className="text-xs text-gray-500 text-center mb-2 font-medium">
-                  Demo Credentials:
-                </p>
-                <div className="text-xs space-y-1 text-gray-600">
-                  <p>
-                    <strong className="text-blue-600">Student:</strong>{" "}
-                    student@example.com / password
-                  </p>
-                  <p>
-                    <strong className="text-purple-600">Admin:</strong>{" "}
-                    admin@MindMate.com / password
-                  </p>
-                </div>
               </div>
             </CardContent>
           </Card>

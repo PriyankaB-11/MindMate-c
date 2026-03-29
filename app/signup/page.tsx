@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -15,25 +15,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAuth, type UserRole } from "@/contexts/auth-context";
 import Header from "@/components/header";
 import {
   Loader2,
   CheckCircle,
-  Brain,
-  Shield,
-  Chrome,
-  Apple,
-  Facebook,
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { getDashboardPath, resolveRoleForSignup } from "@/lib/role-utils";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -41,11 +30,12 @@ export default function SignupPage() {
     email: "",
     password: "",
     confirmPassword: "",
-    role: "" as UserRole | "",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const { signup, isLoading } = useAuth();
+  const [successMessage, setSuccessMessage] = useState("Welcome to MindMate! Redirecting you to your dashboard...");
+  const [isLoading, setIsLoading] = useState(false);
+  const [signupCooldown, setSignupCooldown] = useState(0);
   const router = useRouter();
 
   const handleInputChange = (field: string, value: string) => {
@@ -53,17 +43,32 @@ export default function SignupPage() {
     setError("");
   };
 
+  // Cooldown timer for rate limiting
+  useEffect(() => {
+    if (signupCooldown > 0) {
+      const timer = setTimeout(() => {
+        setSignupCooldown(signupCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [signupCooldown]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Check if still in cooldown from rate limit
+    if (signupCooldown > 0) {
+      setError(`Please wait ${signupCooldown} seconds before trying again.`);
+      return;
+    }
 
     // Validation
     if (
       !formData.name ||
       !formData.email ||
       !formData.password ||
-      !formData.confirmPassword ||
-      !formData.role
+      !formData.confirmPassword
     ) {
       setError("Please fill in all fields");
       return;
@@ -74,26 +79,101 @@ export default function SignupPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long");
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters long");
       return;
     }
 
-    const success = await signup(
-      formData.name,
-      formData.email,
-      formData.password,
-      formData.role
-    );
-    if (success) {
-      setSuccess(true);
-      setTimeout(() => {
-        const dashboardPath =
-          formData.role === "admin" ? "/dashboard/admin" : "/dashboard/student";
-        router.push(dashboardPath);
-      }, 2000);
-    } else {
-      setError("An account with this email already exists");
+    setIsLoading(true);
+
+    const resolvedRole = resolveRoleForSignup(formData.name, formData.email);
+
+    try {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name,
+            role: resolvedRole,
+          },
+        },
+      });
+
+      if (signUpError) {
+        // Handle rate limit errors
+        if (/rate limit|too many|429/i.test(signUpError.message)) {
+          setSignupCooldown(60);
+          setError("Too many signup attempts. Please wait a minute before trying again.");
+        } else {
+          setError(signUpError.message || "Unable to create account");
+        }
+        return;
+      }
+
+      let resolvedUser = signUpData.user;
+      let resolvedSession = signUpData.session;
+
+      if (!signUpData.session || !signUpData.user) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (signInError || !signInData.user) {
+          setError(
+            "Account created, but automatic sign-in failed. If your Supabase project still requires email confirmation, disable email confirmation in Supabase Auth settings.",
+          );
+          return;
+        }
+
+        resolvedSession = signInData.session;
+        resolvedUser = signInData.user;
+      }
+
+      if (!resolvedUser || !resolvedSession) {
+        setError("Account was created, but sign-in session could not be established.");
+        return;
+      }
+
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        {
+          id: resolvedUser.id,
+          name: formData.name,
+          role: resolvedRole,
+          email: formData.email,
+        },
+        { onConflict: "id" },
+      );
+
+      if (profileError) {
+        await supabase.auth.signOut();
+        setError(profileError.message || "Unable to create account profile");
+        return;
+      }
+
+      if (resolvedUser) {
+        setSuccess(true);
+        setSuccessMessage("Welcome to MindMate! Redirecting you to your dashboard...");
+        setTimeout(() => {
+          router.push(getDashboardPath(resolvedRole));
+        }, 2000);
+      } else {
+        setError("Unable to create account");
+      }
+    } catch (unknownError: unknown) {
+      const message = unknownError instanceof Error ? unknownError.message : "Unexpected signup error";
+
+      if (!navigator.onLine || /failed to fetch|networkerror|network request failed/i.test(message)) {
+        setError(
+          "Network error while contacting Supabase. Check your internet, disable VPN/ad blocker, and verify NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+        );
+        return;
+      }
+
+      setError(message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -110,20 +190,17 @@ export default function SignupPage() {
           <Card className="w-full max-w-md bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl">
             <CardContent className="pt-6">
               <div className="text-center space-y-4 animate-in fade-in zoom-in duration-1000">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-green-400 to-teal-500 mb-4">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-r from-green-400 to-teal-500 mb-4">
                   <CheckCircle className="h-10 w-10 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800">
                   Account Created!
                 </h2>
                 <p className="text-gray-600">
-                  Welcome to MindMate! Redirecting you to your dashboard...
+                  {successMessage}
                 </p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-4">
-                  <div
-                    className="bg-gradient-to-r from-green-400 to-teal-500 h-2 rounded-full animate-pulse"
-                    style={{ width: "100%" }}
-                  ></div>
+                  <div className="w-full bg-linear-to-r from-green-400 to-teal-500 h-2 rounded-full animate-pulse"></div>
                 </div>
               </div>
             </CardContent>
@@ -193,44 +270,6 @@ export default function SignupPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="role" className="text-gray-700 font-medium">
-                    Role
-                  </Label>
-                  <Select
-                    value={formData.role}
-                    onValueChange={(value) => handleInputChange("role", value)}
-                    disabled={isLoading}
-                  >
-                    <SelectTrigger className="bg-white/50 border-gray-200/50 text-gray-800 focus:border-blue-300 focus:ring-blue-200 backdrop-blur-sm rounded-xl h-12">
-                      <SelectValue
-                        placeholder="Select your role"
-                        className="text-gray-400"
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white/95 backdrop-blur-xl border-gray-200/50 rounded-xl">
-                      <SelectItem
-                        value="student"
-                        className="text-gray-800 hover:bg-blue-50 focus:bg-blue-50"
-                      >
-                        <div className="flex items-center">
-                          <Brain className="w-4 h-4 mr-2 text-blue-600" />
-                          Student
-                        </div>
-                      </SelectItem>
-                      <SelectItem
-                        value="admin"
-                        className="text-gray-800 hover:bg-purple-50 focus:bg-purple-50"
-                      >
-                        <div className="flex items-center">
-                          <Shield className="w-4 h-4 mr-2 text-purple-600" />
-                          Admin/Counsellor
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
                   <Label
                     htmlFor="password"
                     className="text-gray-700 font-medium"
@@ -282,55 +321,20 @@ export default function SignupPage() {
                 <Button
                   type="submit"
                   className="w-full bg-[#57b97a] hover:bg-[#1b7e3e] text-white shadow-lg transition-all duration-300 rounded-xl h-12 font-medium"
-                  disabled={isLoading}
+                  disabled={isLoading || signupCooldown > 0}
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Creating Account...
                     </>
+                  ) : signupCooldown > 0 ? (
+                    `Wait ${signupCooldown}s...`
                   ) : (
                     "Create Account"
                   )}
                 </Button>
               </form>
-
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-gray-200" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-gray-500">
-                      OR CONTINUE WITH
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/50 border-gray-200/50 text-gray-700 hover:bg-white/70 transition-all duration-300 rounded-xl h-12"
-                  >
-                    <Chrome className="mr-2 h-4 w-4" />
-                    Continue with Google
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/50 border-gray-200/50 text-gray-700 hover:bg-white/70 transition-all duration-300 rounded-xl h-12"
-                  >
-                    <Apple className="mr-2 h-4 w-4" />
-                    Continue with Apple
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/50 border-gray-200/50 text-gray-700 hover:bg-white/70 transition-all duration-300 rounded-xl h-12"
-                  >
-                    <Facebook className="mr-2 h-4 w-4 text-blue-600" />
-                    Continue with Meta
-                  </Button>
-                </div>
-              </div>
 
               <div className="mt-6 text-center">
                 <p className="text-gray-600 text-sm">
